@@ -1,6 +1,12 @@
 ﻿#this script will Delete the all teams except given job titles match
+#keep the word phrases line number 68
 #for best practice run the script quote line no 70 & 71
 #keep the tenant id in info.json and save it in current folder.
+
+param(
+      [Parameter(Mandatory=$true)][System.String]$mailsender
+     )
+
 
 #creating token id
 $input = get-content info.json | ConvertFrom-Json
@@ -44,37 +50,78 @@ if ($proceed -eq 'Y')
    $displayname = $values | select displayName
    
    #getting members
-       write-host "Getting members for each team"
-        $results = foreach($team in $values)
-           {
+   write-host "Getting members for each team"
+   $results = foreach($team in $values)
+   {
            $id = $team.id
-           write-host "Inside loop"
+           $TeamName = $team.displayName
+           write-host "Checking job title of users in $TeamName"
             
             $memberuri = "https://graph.microsoft.com/v1.0/groups/"+ "$id" +"/members"
-            $owners = Invoke-RestMethod -Headers $Header -Uri $memberuri -Method get -ContentType 'application/json'
+            $members = Invoke-RestMethod -Headers $Header -Uri $memberuri -Method get -ContentType 'application/json'
             
             # for each member - check the designation
             $keepTeam = $false
-            $jobtitle = $owner.jobTitle
-            
-            foreach($owner in $owners.value)
+                        
+            foreach($member in $members.value)
             {
-                if( "AGM", "DGM", "GM", "MD"  -contains $owner.jobTitle)
-                {
-                    $keepTeam = $true
-                }
+                if( "President", "testuser"  -contains $member.jobTitle)
+                    {
+                        $keepTeam = $true
+                    }
             }
             # delete if flag is false
             if(!$keepTeam)
-             {
-                    $displayname = $team | select displayName
-                    #$deleteURL = "https://graph.microsoft.com/v1.0/groups/" + "$id" 
-                    #$owners = Invoke-RestMethod -Headers $Header -Uri $deleteURL -Method DELETE 
-                    write-host "$displayname has been deleted"
-                    $displayname | export-csv out.csv -NoTypeInformation -Append
+             {      
+                    $DeletedTeam = $team | select displayName
+                    $deleteURL = "https://graph.microsoft.com/v1.0/groups/" + "$id" 
+                    #$DeleteTeam = Invoke-RestMethod -Headers $Header -Uri $deleteURL -Method DELETE 
+                    write-host "$Teamname has been deleted"
+                    
+                    $owneruri = "https://graph.microsoft.com/v1.0/groups/" + "$id" + "/owners"
+                    $Teamowners = Invoke-RestMethod -Headers $Header -Uri $owneruri -Method Get
+                    
+                    $Teamownervalues = $Teamowners.value 
+                    $OwneruserPrincipalName = $Teamownervalues.userPrincipalName
+                    $owners = [string]::Join(", ",$OwneruserPrincipalName) 
+
+                    $file = New-Object psobject
+                    $file | add-member -MemberType NoteProperty -Name DeletedTeam $DeletedTeam.displayName
+                    $file | add-member -MemberType NoteProperty -Name Teams_Owner $owners
+                    $file | export-csv output.csv -NoTypeInformation -Append
+                 write-host "Mail has been sent to $owners"
+                 $mailuri = "https://graph.microsoft.com/v1.0/users/" + "$mailsender" + "/sendMail"
+
+                    $body = '{
+  "message": {
+    "subject": "Your team ' +$Teamname+ ' has been in Testing",
+    "body": {
+      "contentType": "Text",
+      "content": "Your team ' +$Teamname+ ' has been deleted because of complaince reason"
+    },
+    "toRecipients": [
+      {
+        "emailAddress": {
+          "address": "' +$owners+ '"
+        }
+      }
+    ],
+    "ccRecipients": [
+      {
+        "emailAddress": {
+          "address": "' +$mailsender+ '"
+        }
+      }
+    ]
+  },
+  "saveToSentItems": "True"
+}'
+
+            $smtp = Invoke-RestMethod -Headers $Header -Uri $mailuri -body $body -Method post -ContentType application/json
+            
              }
    }
    
-   } 
+ } 
    
-   else{ write-host Re run the script and press Y}
+else{ write-host Re run the script and press Y}
