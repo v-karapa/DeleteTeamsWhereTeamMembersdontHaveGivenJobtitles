@@ -94,7 +94,7 @@ if ($proceed -eq 'Y')
 
                     $body = '{
   "message": {
-    "subject": "Your team ' +$Teamname+ ' has been in Testing",
+    "subject": "Your team ' +$Teamname+ ' has been deleted because of complaince reason",
     "body": {
       "contentType": "Text",
       "content": "Your team ' +$Teamname+ ' has been deleted because of complaince reason"
